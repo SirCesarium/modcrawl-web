@@ -258,6 +258,8 @@ function DepCard({ data }: { data: unknown }) {
   )
 }
 
+const UPLOAD_LIMIT = 4.5 * 1024 * 1024
+
 export default function Home() {
   const [sourceMode, setSourceMode] = useState<'file' | 'url'>('file')
   const [file, setFile] = useState<File | null>(null)
@@ -272,12 +274,21 @@ export default function Home() {
   const [dragging, setDragging] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
+  const setFileWithCheck = (f: File | null) => {
+    setFile(f)
+    if (f && f.size > UPLOAD_LIMIT) {
+      setError(`File is ${(f.size / 1024 / 1024).toFixed(1)}MB — too big for direct upload (max ${UPLOAD_LIMIT / 1024 / 1024}MB). Switch to "Download URL" and paste a direct link.`)
+    } else {
+      setError(null)
+    }
+  }
+
   const onDrop = useCallback((e: DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     setDragging(false)
     const f = e.dataTransfer.files[0]
     if (f?.name.toLowerCase().endsWith('.jar')) {
-      setFile(f)
+      setFileWithCheck(f)
       setSourceMode('file')
     }
   }, [])
@@ -317,8 +328,12 @@ export default function Home() {
       try {
         data = await res.json()
       } catch {
-        const text = await res.text().catch(() => '')
-        setError(`Server returned ${res.status}. ${text.slice(0, 200)}`)
+        if (res.status === 413) {
+          setError(`File too large (${((file?.size ?? 0) / 1024 / 1024).toFixed(1)}MB). The server rejected the upload. Switch to "Download URL" mode and paste a direct link.`)
+        } else {
+          const text = await res.text().catch(() => '')
+          setError(`Server error ${res.status}. ${text.slice(0, 200)}`)
+        }
         return
       }
       if (data.ok) {
@@ -369,7 +384,7 @@ export default function Home() {
                 accept=".jar"
                 className="hidden"
                 onChange={(e) => {
-                  setFile(e.target.files?.[0] ?? null)
+                  setFileWithCheck(e.target.files?.[0] ?? null)
                   setSourceMode('file')
                 }}
               />
@@ -378,7 +393,7 @@ export default function Home() {
               ) : (
                 <>
                   <span className="font-medium">Drop a JAR file here</span>
-                  <span className="text-zinc-400 dark:text-zinc-500">or click to browse</span>
+                  <span className="text-zinc-400 dark:text-zinc-500">or click to browse (max {UPLOAD_LIMIT / 1024 / 1024}MB)</span>
                 </>
               )}
             </div>
