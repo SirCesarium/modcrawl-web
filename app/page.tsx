@@ -259,7 +259,9 @@ function DepCard({ data }: { data: unknown }) {
 }
 
 export default function Home() {
+  const [sourceMode, setSourceMode] = useState<'file' | 'url'>('file')
   const [file, setFile] = useState<File | null>(null)
+  const [jarUrl, setJarUrl] = useState('')
   const [type, setType] = useState(true)
   const [metadata, setMetadata] = useState(true)
   const [dep, setDep] = useState(false)
@@ -276,6 +278,7 @@ export default function Home() {
     const f = e.dataTransfer.files[0]
     if (f?.name.toLowerCase().endsWith('.jar')) {
       setFile(f)
+      setSourceMode('file')
     }
   }, [])
 
@@ -286,20 +289,27 @@ export default function Home() {
 
   const onDragLeave = () => setDragging(false)
 
+  const canSubmit = sourceMode === 'file' ? !!file : jarUrl.trim().length > 0
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    if (!file) return
+    if (!canSubmit) return
 
     setLoading(true)
     setError(null)
     setResults(null)
 
     const formData = new FormData()
-    formData.set('jar', file)
     formData.set('type', String(type))
     formData.set('metadata', String(metadata))
     formData.set('dep', String(dep))
     formData.set('includeJarInJar', String(includeJarInJar))
+
+    if (sourceMode === 'file' && file) {
+      formData.set('jar', file)
+    } else if (sourceMode === 'url') {
+      formData.set('url', jarUrl.trim())
+    }
 
     try {
       const res = await fetch('/api/analyze', { method: 'POST', body: formData })
@@ -328,37 +338,59 @@ export default function Home() {
       <main className="w-full max-w-xl flex flex-col gap-6">
         <h1 className="text-2xl font-bold tracking-tight">modcrawl</h1>
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
-          Upload a Minecraft mod/plugin JAR to inspect its metadata, type, and dependencies.
+          Analyze a Minecraft mod/plugin JAR to inspect its metadata, type, and dependencies.
         </p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-          <div
-            onDrop={onDrop}
-            onDragOver={onDragOver}
-            onDragLeave={onDragLeave}
-            onClick={() => inputRef.current?.click()}
-            className={`flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-8 text-sm cursor-pointer transition-colors ${
-              dragging
-                ? 'border-blue-500 bg-blue-50 dark:bg-blue-950'
-                : 'border-zinc-300 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-500'
-            }`}
-          >
-            <input
-              ref={inputRef}
-              type="file"
-              accept=".jar"
-              className="hidden"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            />
-            {file ? (
-              <span className="font-medium text-blue-600 dark:text-blue-400">{file.name}</span>
-            ) : (
-              <>
-                <span className="font-medium">Drop a JAR file here</span>
-                <span className="text-zinc-400 dark:text-zinc-500">or click to browse</span>
-              </>
-            )}
+          <div className="flex rounded-lg border border-zinc-200 dark:border-zinc-800 p-0.5 bg-zinc-100 dark:bg-zinc-800">
+            <button type="button" onClick={() => setSourceMode('file')} className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${sourceMode === 'file' ? 'bg-white dark:bg-zinc-700 shadow-sm' : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700'}`}>
+              Upload file
+            </button>
+            <button type="button" onClick={() => setSourceMode('url')} className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${sourceMode === 'url' ? 'bg-white dark:bg-zinc-700 shadow-sm' : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700'}`}>
+              Download URL
+            </button>
           </div>
+
+          {sourceMode === 'file' ? (
+            <div
+              onDrop={onDrop}
+              onDragOver={onDragOver}
+              onDragLeave={onDragLeave}
+              onClick={() => inputRef.current?.click()}
+              className={`flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-8 text-sm cursor-pointer transition-colors ${
+                dragging
+                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-950'
+                  : 'border-zinc-300 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-500'
+              }`}
+            >
+              <input
+                ref={inputRef}
+                type="file"
+                accept=".jar"
+                className="hidden"
+                onChange={(e) => {
+                  setFile(e.target.files?.[0] ?? null)
+                  setSourceMode('file')
+                }}
+              />
+              {file ? (
+                <span className="font-medium text-blue-600 dark:text-blue-400">{file.name}</span>
+              ) : (
+                <>
+                  <span className="font-medium">Drop a JAR file here</span>
+                  <span className="text-zinc-400 dark:text-zinc-500">or click to browse</span>
+                </>
+              )}
+            </div>
+          ) : (
+            <input
+              type="text"
+              value={jarUrl}
+              onChange={(e) => setJarUrl(e.target.value)}
+              placeholder="https://example.com/mod.jar"
+              className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 text-sm bg-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          )}
 
           <fieldset className="flex flex-col gap-2">
             <label className="flex items-center gap-2 text-sm">
@@ -391,7 +423,7 @@ export default function Home() {
 
           <button
             type="submit"
-            disabled={!file || loading}
+            disabled={!canSubmit || loading}
             className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {loading ? 'Analyzing...' : 'Analyze'}
