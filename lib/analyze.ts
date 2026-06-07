@@ -1,6 +1,7 @@
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { writeFile, unlink } from 'fs/promises'
+import { existsSync, statSync } from 'fs'
 import { randomUUID } from 'crypto'
 import path from 'path'
 
@@ -8,6 +9,21 @@ const execFileAsync = promisify(execFile)
 const MODCRAWL_PATH = path.join(process.cwd(), 'modcrawl')
 const MAX_FILE_SIZE = 100 * 1024 * 1024
 const EXEC_TIMEOUT = 30_000
+
+export function checkBinary(): string | null {
+  if (!existsSync(MODCRAWL_PATH)) {
+    return `modcrawl binary not found at ${MODCRAWL_PATH}. This API requires the modcrawl CLI to be installed alongside the server.`
+  }
+  try {
+    const stat = statSync(MODCRAWL_PATH)
+    if (!(stat.mode & 0o111)) {
+      return `modcrawl binary at ${MODCRAWL_PATH} is not executable. Run: chmod +x ${MODCRAWL_PATH}`
+    }
+  } catch {
+    return `Cannot access modcrawl binary at ${MODCRAWL_PATH}`
+  }
+  return null
+}
 
 const ZIP_MAGIC = Buffer.from([0x50, 0x4B])
 

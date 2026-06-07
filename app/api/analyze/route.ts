@@ -1,6 +1,11 @@
-import { analyzeJar, type AnalyzeOptions } from '@/lib/analyze'
+import { analyzeJar, checkBinary, type AnalyzeOptions } from '@/lib/analyze'
 
 export async function POST(request: Request) {
+  const binaryIssue = checkBinary()
+  if (binaryIssue) {
+    return Response.json({ ok: false, error: binaryIssue }, { status: 501 })
+  }
+
   let formData: FormData
   try {
     formData = await request.formData()

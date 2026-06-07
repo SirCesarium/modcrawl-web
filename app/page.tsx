@@ -303,14 +303,21 @@ export default function Home() {
 
     try {
       const res = await fetch('/api/analyze', { method: 'POST', body: formData })
-      const data = await res.json()
+      let data: Record<string, unknown>
+      try {
+        data = await res.json()
+      } catch {
+        const text = await res.text().catch(() => '')
+        setError(`Server returned ${res.status}. ${text.slice(0, 200)}`)
+        return
+      }
       if (data.ok) {
-        setResults(data.results)
+        setResults(data.results as Results)
       } else {
-        setError(data.error ?? 'Unknown error')
+        setError((data.error as string) ?? 'Unknown error')
       }
     } catch {
-      setError('Network error — is the server running?')
+      setError('Cannot reach the server. This app requires the modcrawl CLI to run on the server. See README for self-hosting instructions.')
     } finally {
       setLoading(false)
     }
